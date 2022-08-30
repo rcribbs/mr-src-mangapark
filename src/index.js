@@ -240,8 +240,11 @@ export async function searchManga(seriesName, offset=0, limit=10) {
 
     // TODO: Should handle pagination
     
-    let results = json.data.items.map(({ data }) => {
-        const id = data.id;
+    let results = json.data.get_content_browse_search.items.map(({ data }) => {
+        console.debug("Processing chapter.", {
+            data: JSON.stringify(data)
+        })
+        const id = data.id.toString();
 
         let title = data.name;
         if (!title) {
@@ -292,7 +295,7 @@ export async function listChapters(
     );
     let json = await response.json();
 
-    if(json.data.length == 0) {
+    if(json.data.get_content_comicChapterRangeList.items.length == 0) {
         console.log(`No new chapters found for series.`, { id: seriesIdentifier });
         return ChapterList({
             chapters: [],
@@ -300,17 +303,19 @@ export async function listChapters(
     }
 
     let chapters = [];
-    for (result of json.data.get_content_comicChapterRangeList.items) {
-        const number = result.serial;
+    for (let result of json.data.get_content_comicChapterRangeList.items) {
+        const number = result.serial.toString();
         const filtered = result.chapterNodes.filter(x => x.data.lang.toLowerCase() == "en");
         let instances = filtered.map(chap => {
-            const id = chap.id;
+            const id = chap.id.toString();
             const {
                 dname: title,
-                dateCreate: created,
-                dateModify: updated,
+                dateCreate: createdMs,
+                dateModify: updatedMs,
                 srcTitle: variant
             } = chap.data;
+            const created = new Date(createdMs);
+            const updated = new Date(updatedMs);
 
             let chapItem = new ChapterListItem({
                 identifier: id,
@@ -335,7 +340,7 @@ export async function listChapters(
 }
 
 export async function getChapter(chapterIdentifier) {
-        let response = await fetch(
+    let response = await fetch(
         apiBaseUrl,
         {
             method: "POST",
@@ -352,9 +357,12 @@ export async function getChapter(chapterIdentifier) {
         }
     );
     let json = await response.json();
-    const pageUrls = json.map((url, word) => (
-        `${url}?${word}`
-    ));
+
+    const imageData = json.data.get_content_chapter_node.data.imageSet;
+    const pageUrls = imageData.httpLis.map((url, i) => {
+        const word = imageData.wordLis[i];
+        return `${url}?${word}`;
+    });
 
     return new ChapterData({ pageUrls });
 }
