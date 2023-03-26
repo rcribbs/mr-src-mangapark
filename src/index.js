@@ -118,7 +118,7 @@ class MangaSeriesList {
 
 export let EXTENSION_ID="596453e3-9ddf-4370-b131-26e1ff414c72";
 
-const apiBaseUrl = "https://api.mangapark.org/apo/";
+const apiBaseUrl = "https://mangapark.org/apo/";
 
 const searchQuery = `
 query get_content_browse_search($select: ComicSearchSelect) {
