@@ -1,0 +1,46 @@
+name: Tag Version on Metadata Change
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  check_metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      should_tag: ${{ steps.validate_version.outputs.should_tag }}
+      tag_version: ${{ steps.read_toml.outputs.value }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Read Version
+      uses: SebRollen/toml-action@v1.0.2
+      id: read_toml
+      with:
+        file: 'mrextmeta.toml'
+        field: 'plugin.general.version'
+    - name: Find Matching Tag
+      id: tagger
+      uses: jimschubert/query-tag-action@v1
+      continue-on-error: true
+      with:
+        include: 'v${{steps.read_toml.outputs.value}}'
+    - name: Validate Version
+      id: validate_version
+      run: |
+          if [ -x "${{steps.tagger.outputs.tag}}" ]; then \
+          echo "should_tag=1" >> "$GITHUB_OUTPUT"; else \
+          echo "should_tag=0" >> "$GITHUB_OUTPUT"; fi
+
+
+  tag_version:
+    runs-on: ubuntu-latest
+    if: ${{ needs.check_metadata.outputs.should_tag == '1' }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Tag Version
+      id: tag_version
+      uses: mathieudutour/github-tag-action@v6.1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        custom_tag: "v${{ needs.check_metadata.outputs.tag_version }}"

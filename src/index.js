@@ -121,8 +121,8 @@ export let EXTENSION_ID="596453e3-9ddf-4370-b131-26e1ff414c72";
 const apiBaseUrl = "https://mangapark.org/apo/";
 
 const searchQuery = `
-query get_content_browse_search($select: ComicSearchSelect) {
-  get_content_browse_search(select: $select) {
+query get_content_browse_search($select: SearchComic_Select) {
+  get_searchComic(select: $select) {
     reqPage
     reqSize
     reqSort
@@ -138,9 +138,6 @@ query get_content_browse_search($select: ComicSearchSelect) {
       data {
         id
         dbStatus
-        isNormal
-        isHidden
-        isDeleted
         dateCreate
         datePublic
         dateModify
@@ -153,10 +150,12 @@ query get_content_browse_search($select: ComicSearchSelect) {
         artists
         readDirection
         urlPath
-        imageCoverUrl
         urlCover600
         urlCover300
         urlCoverOri
+        tranLang
+        chaps_normal
+        chaps_others
       }
     }
   }
@@ -164,51 +163,33 @@ query get_content_browse_search($select: ComicSearchSelect) {
 `;
 
 const listChaptersQuery = `
-query get_content_comicChapterRangeList($select: Content_ComicChapterRangeList_Select) {
-  get_content_comicChapterRangeList(select: $select) {
-    reqRange {
-      x
-      y
-    }
-    missing
-    pager {
-      x
-      y
-    }
-    items {
+query ($id: ID!) {
+  get_comicChapterList(comicId: $id) {
+    id
+    data {
+      dbStatus
+      isFinal
+      dateCreate
+      datePublic
+      dateModify
+      lang
+      volume
       serial
-      chapterNodes {
-        id
-        data {
-          id
-          dbStatus
-          isNormal
-          isHidden
-          isDeleted
-          isFinal
-          dateCreate
-          datePublic
-          dateModify
-          lang
-          volume
-          serial
-          dname
-          title
-          srcTitle
-        }
-      }
+      dname
+      title
+      srcName
+      srcTitle
     }
   }
 }
 `;
 
 const getChapterQuery = `
-query get_content_chapter_node($id: ID!) {
-  get_content_chapter_node(id: $id) {
+query($id: ID!) {
+  get_chapterNode(id: $id) {
     data {
-      imageSet {
-        httpLis
-        wordLis
+      imageFile {
+        urlList
       }
     }
   }
@@ -223,14 +204,15 @@ export async function searchManga(seriesName, offset=0, limit=10) {
         {
             method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
+                "Content-Type": "application/json",
+                "Accept": "application/json",
             },
             body: JSON.stringify({
                 query: searchQuery,
                 variables: {
                     select: {
-                        word: seriesName
+                        word: seriesName,
+                        incTLangs: ["en"]
                     }
                 }
             })
@@ -239,8 +221,15 @@ export async function searchManga(seriesName, offset=0, limit=10) {
     let json = await response.json();
 
     // TODO: Should handle pagination
-    
-    let results = json.data.get_content_browse_search.items.map(({ data }) => {
+    let results = json.data.get_searchComic.items.filter(({ data }) => {
+        let hasChapters = (data.chaps_normal > 0) || (data.chaps_others > 0);
+        if (!hasChapters) {
+            console.debug("Skipping series without chapters.", {
+                id: data.id
+            });
+        }
+        return hasChapters;
+    }).map(({ data }) => {
         console.debug("Processing chapter.", {
             data: JSON.stringify(data)
         })
@@ -258,7 +247,7 @@ export async function searchManga(seriesName, offset=0, limit=10) {
             return null;
         }
 
-        const coverUrl = data.imageCoverUrl;
+        const coverUrl = data.urlCover300;
 
         return new MangaSeries({
             identifier: id,
@@ -280,55 +269,81 @@ export async function listChapters(
         {
             method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
+                "Content-Type": "application/json",
+                "Accept": "application/json",
             },
             body: JSON.stringify({
                 query: listChaptersQuery,
                 variables: {
-                    select: {
-                        comicId: seriesIdentifier
-                    }
+                    id: seriesIdentifier
                 }
             })
         }
     );
+
+    if(!response.ok) {
+        let respText = ""
+        try {
+            respText = await response.text;
+        } catch {}
+
+        throw new Error(`Bad response from server: ${response.status} - ${response.statusText}\n${respText}`);
+    }
+
     let json = await response.json();
 
-    if(json.data.get_content_comicChapterRangeList.items.length == 0) {
-        console.log(`No new chapters found for series.`, { id: seriesIdentifier });
-        return ChapterList({
-            chapters: [],
+    try {
+        if(json.data.get_comicChapterList == null) {
+            throw "Empty response."
+        }
+
+        const bodyLength = json.data.get_comicChapterList.length
+
+        if(bodyLength == 0) {
+            throw "No chapters returned."
+        }
+    } catch (error) {
+        console.log("Couldn't retrieve any chapters.", {
+            identifier: seriesIdentifier,
+            error: error,
+            body: json
         })
+
+        throw error
     }
 
     let chapters = [];
-    for (let result of json.data.get_content_comicChapterRangeList.items) {
-        const number = result.serial.toString();
-        const filtered = result.chapterNodes.filter(x => x.data.lang.toLowerCase() == "en");
-        let instances = filtered.map(chap => {
-            const id = chap.id.toString();
-            const {
-                dname: title,
-                dateCreate: createdMs,
-                dateModify: updatedMs,
-                srcTitle: variant
-            } = chap.data;
-            const created = new Date(createdMs);
-            const updated = new Date(updatedMs);
+    for (let {id, data} of json.data.get_comicChapterList) {
+        const number = data.serial.toString();
+        // NOTE: I think that they may be removing the lang field in the future.
+        //       It seems like a given series must be one language now.
+        //
+        if (data.lang && (data.lang.toLowerCase() != "en")) {
+            continue;
+        }
 
-            let chapItem = new ChapterListItem({
-                identifier: id,
-                title,
-                number,
-                variant,
-                created,
-                updated,
-            });
-            console.debug(`Creating final ChapterListItem`, chapItem);
-            return chapItem;
+        const identifier = id.toString();
+        const {
+            dname: title,
+            dateCreate: createdMs,
+            dateModify: updatedMs,
+            srcTitle: variant
+        } = data;
+
+        const created = new Date(createdMs);
+        const updated = new Date(updatedMs);
+
+        let chapItem = new ChapterListItem({
+            identifier,
+            title,
+            number,
+            variant,
+            created,
+            updated,
         });
-        chapters.push(...instances);
+        console.debug(`Creating chapter.`, chapItem);
+
+        chapters.push(chapItem);
     };
 
     console.debug(`Creating final chapter list.`, { chapters });
@@ -345,8 +360,8 @@ export async function getChapter(chapterIdentifier) {
         {
             method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
+                "Content-Type": "application/json",
+                "Accept": "application/json",
             },
             body: JSON.stringify({
                 query: getChapterQuery,
@@ -358,11 +373,7 @@ export async function getChapter(chapterIdentifier) {
     );
     let json = await response.json();
 
-    const imageData = json.data.get_content_chapter_node.data.imageSet;
-    const pageUrls = imageData.httpLis.map((url, i) => {
-        const word = imageData.wordLis[i];
-        return `${url}?${word}`;
-    });
+    const pageUrls = json.data.get_chapterNode.data.imageFile.urlList;
 
     return new ChapterData({ pageUrls });
 }

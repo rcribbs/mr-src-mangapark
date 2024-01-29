@@ -1,3 +1,12 @@
-name = "MangaPark"
-version = "1.1.0"
-author = "Rohan Cribbs"
+mangaright = "1.0.0"
+
+[plugin]
+id = "596453e3-9ddf-4370-b131-26e1ff414c72"
+
+[plugin.name]
+primary = "MangaPark"
+aliases = []
+
+[plugin.general]
+version = "2.0.0"
+author = "rcribbs"
