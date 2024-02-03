@@ -3,23 +3,30 @@
   "scripts": {
     "start": "parcel serve ./src/index.js",
     "build-dev": "parcel build ./src/index.js --no-source-maps --global mangaMan --no-minify",
-    "build": "parcel build ./src/index.js --no-source-maps --global mangaMan"
+    "build": "parcel build ./src/index.js --no-source-maps --global mangaMan",
+    "flow": "flow"
   },
   "main": "src/index.js",
-  "browserslist": [
+  "browserlists": [
     "last 2 iOS major versions"
   ],
   "keywords": [
-    "mangaman-source"
+    "mangaright-source"
   ],
   "devDependencies": {
-    "babel-core": "^6.26.3",
+    "@babel/core": "7.17.12",
+    "@babel/plugin-proposal-class-properties": "^7.18.6",
+    "@babel/preset-flow": "^7.22.5",
     "babel-preset-env": "^1.7.0",
-    "browserslist": "^4.21.5",
     "flow": "^0.2.3",
-    "parcel-bundler": "^1.12.5"
+    "flow-bin": "^0.211.1",
+    "node-fetch": "2",
+    "parcel": "1.12.3",
+    "parcel-bundler": "^1.12.5",
+    "regenerator-runtime": "^0.11.1",
+    "yarn": "^1.22.19"
   },
   "dependencies": {
-    "core-js": "^3.15.2"
+    "core-js": "^3.31.1"
   }
 }

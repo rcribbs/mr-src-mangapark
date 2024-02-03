@@ -1,49 +1,59 @@
 import "core-js/features/url";
 
 class ChapterListItem {
-    number = "";
+    number: string;
     // Number is the chapter number. Could be an actual number like "1" or could
     // be a special chapter like "EX" or "Omake".
     //
-    title = "";
+    title: string;
     // Name is the short title of the chapter.
     // 
-    description = "";
+    description: string;
     // Description is the longer description of the chapter. May be blank
     // depending on the way the website handles information about chapters.
     // 
-    identifier = "";
+    identifier: string;
     // Identifier is a source-specific identifier. Could be an id like "1234" or
     // anything that makes sense for this source. This identifier will be
     // provided in getChapter call as chapterIdentifier to retrieve the chapter
     // pages.
     // 
-    group = null
+    group: ?string
     // Optional: Scanalation group if one exists.
     // 
-    variant = null
+    variant: ?string
     // Optional: Set variant if there are multiple versions of the same chapter
     //           and group is not present or not enough to differintiate.
     //
-    created = null;
+    created: ?Date
     // Optional: Date created as a string if it exists.
 
-    created = null;
+    updated: ?Date
     // Optional: Date updated as a string if it exists.
 
-    published = null;
+    published: ?Date
     // Optional: Date of original chapter's publication as a string if it exists.
 
     constructor({
         number,
         identifier,
         title,
-        description = null,
+        description = "",
         group = null,
         variant = null,
         created = null,
         updated = null,
         published = null,
+    }: {
+        number: string,
+        identifier: string,
+        title: string,
+        description?: string,
+        group?: ?string,
+        variant?: ?string,
+        created?: ?Date,
+        updated?: ?Date,
+        published?: ?Date,
     }) {
         this.number = number;
         this.identifier = identifier;
@@ -58,61 +68,96 @@ class ChapterListItem {
 }
 
 class ChapterList {
-    chapters = [];
+    chapters: Array<ChapterListItem>;
     // Chapters contains all the chapters for a given manga series.
     //
 
-    constructor({ chapters }) {
+    constructor({ chapters }: { chapters: Array<ChapterListItem> }) {
         this.chapters = chapters;
     }
 }
 
-class ChapterData {
-    pageUrls = [];
-    // PageUrls contains all the page urls for the chapter.
 
-    constructor({ pageUrls }) {
-        this.pageUrls = pageUrls;
+type PageDataHandler = (string) => (string);
+
+class PageData {
+    version: string = "1.0.0"
+    highUrl: string
+    lowUrl: ?string
+    highHandler: ?PageDataHandler
+    lowHandler: ?PageDataHandler
+
+    constructor({
+        highUrl,
+        lowUrl = null,
+        highHandler = null,
+        lowHandler = null,
+    }: {
+        highUrl: string,
+        lowUrl?: ?string,
+        highHandler?: ?PageDataHandler,
+        lowHandler?: ?PageDataHandler,
+    }) {
+        this.highUrl = highUrl;
+        this.lowUrl = lowUrl;
+        this.highHandler = highHandler;
+        this.lowHandler = lowHandler;
+    }
+}
+
+class ChapterData {
+    version: string = "2.0.0"
+
+    pages: Array<PageData>
+
+    constructor({ pages }: { pages: Array<PageData> }) {
+        this.pages = pages
     }
 }
 
 class MangaSeries {
-    name = "";
+    name: string;
     // Name is the name of the manga series.
     // 
-    identifier = "";
+    identifier: string;
     // Identifier is the id or unique identifier for this manga series on this
     // source.
     // 
-    ranking = -1;
+    coverUrl: ?string;
+    // NOTE: Optional
+    // The coverUrl if one exists. Used to help users identify best matches.
+    ranking: number;
     // NOTE: Optional
     // Ranking is the a representation of the likelyhood of this result being
     // the correct match. 0 being the best match and Number.MAX_SAFE_INTEGER
     // being the worst match. All negative numbers will be treated as equal.
     // 
-    coverUrl = null;
-    // NOTE: Optional
-    // The coverUrl if one exists. Used to help users identify best matches.
 
-    constructor({ name, identifier, ranking = -1, coverUrl = null }) {
+    constructor({
+        name,
+        identifier,
+        coverUrl = null,
+        ranking = -1,
+    }: {
+        name: string,
+        identifier: string,
+        coverUrl?: ?string,
+        ranking?: number,
+    }) {
         this.name = name;
         this.identifier = identifier;
-        this.ranking = ranking;
         this.coverUrl = coverUrl;
+        this.ranking = ranking;
     }
 }
 
 class MangaSeriesList {
-    results = [];
+    results: Array<MangaSeries> = [];
     // Results is the list of all MangaSeries objects which match this query in
     // a searchManga call.
 
-    constructor({ results = [] }) {
+    constructor({ results = [] }: { results: Array<MangaSeries> }) {
         this.results = results;
-    }
-
-    addResult({ name, identifier, ranking = -1 }) {
-        this.results.push(MangaSeries({ name, identifier }));
     }
 }
 
@@ -374,6 +419,9 @@ export async function getChapter(chapterIdentifier) {
     let json = await response.json();
 
     const pageUrls = json.data.get_chapterNode.data.imageFile.urlList;
+    const pages = pageUrls.map((url) => (
+        new PageData({ highUrl: url })
+    ));
 
-    return new ChapterData({ pageUrls });
+    return new ChapterData({ pages });
 }
